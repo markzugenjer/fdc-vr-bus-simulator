@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+
+# Android build folder (made by apk:setup / apk:build). The signing key lives in ../vr-games-1/android.
+android/
+*.apk
+*.aab

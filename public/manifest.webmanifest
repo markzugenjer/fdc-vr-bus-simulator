@@ -1,0 +1,30 @@
+{
+  "name": "FDC Smile Bus",
+  "short_name": "Smile Bus",
+  "description": "Drive the FDC Dental Clinic Smile Bus through a festive town, pick up passengers and bring smiles closer.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f2a18",
+  "theme_color": "#3cb84a",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

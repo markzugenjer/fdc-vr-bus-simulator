@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>FDC Smile Bus</title>
+    <meta name="theme-color" content="#3cb84a" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon-192.png" />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0f2a18; }
+      #app, #app canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+      #hud {
+        position: fixed; top: 16px; left: 16px; max-width: min(400px, calc(100vw - 32px));
+        padding: 14px 16px; border-radius: 16px; display: grid; gap: 10px;
+        background: rgba(255, 255, 255, 0.95); color: #1f3a2a;
+        font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        box-shadow: 0 8px 28px rgba(60, 184, 74, 0.3); border: 2px solid #c9f0cf;
+      }
+      #hud[hidden] { display: none; }
+      .brand { font-size: 18px; font-weight: 900; letter-spacing: -0.01em; color: #2f9e3d; }
+      .brand b { color: #e86aa6; }
+      .status { color: #5f7466; font-size: 13px; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .row button {
+        font: inherit; font-weight: 800; border: 0; border-radius: 999px; padding: 8px 18px;
+        cursor: pointer; background: #3cb84a; color: #fff;
+      }
+      .row button:focus-visible { outline: 3px solid #e86aa6; outline-offset: 2px; }
+      .help { margin: 0; color: #5f7466; font-size: 12.5px; }
+      kbd { font: 12px ui-monospace, Menlo, monospace; background: #e3f6e6; border-radius: 4px; padding: 1px 5px; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud">
+      <div class="brand">fdc <b>Smile Bus</b></div>
+      <div class="status" id="status">Memuat…</div>
+      <div class="row"><button id="enter-vr" type="button" hidden>Masuk VR</button></div>
+      <p class="help">
+        Desktop: <kbd>W</kbd> gas · <kbd>S</kbd> rem · <kbd>A</kbd>/<kbd>D</kbd> setir · <kbd>E</kbd> pintu · <kbd>H</kbd> klakson · geser untuk melihat · <kbd>M</kbd> menu
+      </p>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

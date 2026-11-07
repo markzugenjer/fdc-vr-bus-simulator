@@ -1,0 +1,23 @@
+{
+  "name": "fdc-vr-bus-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FDC Smile Bus: drive the FDC Dental Clinic Smile Bus through a festive town. A VR bus simulator for Meta Quest 3 (Three.js + WebXR).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "quest:connect": "adb reverse tcp:5177 tcp:5177",
+    "apk:setup": "node scripts/apk.mjs setup",
+    "apk:build": "node scripts/apk.mjs build",
+    "pages:setup": "node -e \"require('fs').mkdirSync('.github/workflows',{recursive:true});require('fs').copyFileSync('scripts/deploy-pages.yml','.github/workflows/deploy.yml');console.log('Created .github/workflows/deploy.yml')\""
+  },
+  "dependencies": {
+    "qrcode-generator": "1.4.4",
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "vite": "5.4.10"
+  }
+}
