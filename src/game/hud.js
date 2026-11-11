@@ -205,19 +205,19 @@ export function buildHud(bus, route) {
     }
   }, { ppm: 1400 });
   // the route screen stands ON the dashboard in a little tablet holder (it used to dip into it)
-  navPanel.mesh.position.set(-0.08, 1.7, -3.9);
+  navPanel.mesh.position.set(-0.08, 1.75, -3.92); // its bottom edge stays well above the dash top (1.59)
   navPanel.mesh.rotation.set(-0.3, 0.18, 0);
   navPanel.mesh.renderOrder = 2;
   const holderMat = new THREE.MeshStandardMaterial({ color: '#1b1f22', roughness: 0.5 });
   const bezel = new THREE.Mesh(new RoundedBoxGeometry(0.405, 0.285, 0.03, 2, 0.012), holderMat);
   bezel.position.z = -0.018;
   navPanel.mesh.add(bezel);
-  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.12, 8), holderMat);
-  arm.position.set(0, -0.1, -0.06);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.16, 8), holderMat);
+  arm.position.set(0, -0.11, -0.06);
   arm.rotation.x = 0.3;
   navPanel.mesh.add(arm);
   const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.02, 14), holderMat);
-  foot.position.set(-0.08, 1.535, -3.95);
+  foot.position.set(-0.08, 1.6, -3.97);
   g.add(navPanel.mesh, foot);
 
   // ------------------------------------------------ message strip at the top of the windscreen
