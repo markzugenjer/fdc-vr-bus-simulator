@@ -19,7 +19,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 export const DRIVER_EYE = new THREE.Vector3(0.55, 1.97, -3.22);
 export const WHEEL_POS = new THREE.Vector3(0.55, 1.4, -3.68);
 export const WHEEL_TILT = 0.95; // radians back from vertical (bus wheels lie quite flat)
-export const WHEEL_R = 0.22;
+export const WHEEL_R = 0.25; // a real bus wheel is about 50 cm across
 const FLOOR = 0.8;
 export const SEAT_TOP = 0.44; // passenger seat cushion height above the floor
 const HALF = BUS.width / 2;
@@ -213,15 +213,47 @@ export function buildBus(app) {
     cab.add(new THREE.BoxGeometry(0.1, len, 0.1), '#22272b', { x: mid.x, y: mid.y, z: mid.z, rx: -Math.atan2(b.z - a.z, b.y - a.y) });
   }
   cab.add(new THREE.BoxGeometry(BUS.width - 0.12, 0.2, 0.32), '#2b3136', { y: 3.0, z: -4.0 }); // header (destination sign box)
-  // dashboard: a broad shelf with a hood over the instruments
-  cab.add(new THREE.BoxGeometry(BUS.width - 0.14, 0.7, 0.55), '#454e55', { y: FLOOR + 0.35 + 0.05, z: -4.02 });
-  cab.add(new THREE.BoxGeometry(BUS.width - 0.14, 0.06, 0.62), '#58626a', { y: 1.49, z: -4.0, rx: 0.12 });
-  cab.add(new THREE.BoxGeometry(0.5, 0.04, 0.4), P.busGreen, { x: -0.6, y: 1.53, z: -3.96, rx: 0.12 }); // green trim on the passenger side
+  // dashboard, built like a city bus's: a wide moulded dash with a padded top and defrost grille,
+  // the driver's binnacle (instruments under a hood, seen over the top of the wheel), a switch
+  // pod on the right, the centre console with the big door / horn / radio / reverse buttons, vents
+  const dashC = '#4a535a';
+  const padC = '#323a40';
+  cab.add(new THREE.BoxGeometry(BUS.width - 0.14, 0.7, 0.55), dashC, { y: FLOOR + 0.35 + 0.05, z: -4.02 });
+  cab.add(new THREE.BoxGeometry(BUS.width - 0.14, 0.05, 0.6), padC, { y: 1.565, z: -4.02 }); // padded top
+  cab.add(new THREE.CylinderGeometry(0.035, 0.035, BUS.width - 0.14, 12), padC, { y: 1.54, z: -3.745, rz: Math.PI / 2 }); // rounded front edge
+  cab.add(new THREE.BoxGeometry(BUS.width - 0.5, 0.006, 0.09), '#111417', { y: 1.593, z: -4.2 }); // defrost grille
+  for (let k = -9; k <= 9; k++) cab.add(new THREE.BoxGeometry(0.008, 0.008, 0.08), '#3d464c', { x: k * 0.1, y: 1.596, z: -4.2 });
+  cab.add(new THREE.BoxGeometry(0.42, 0.012, 0.3), P.busGreen, { x: -0.62, y: 1.596, z: -3.98 }); // green trim on the passenger side
+  // the binnacle: a housing behind the instruments and a curved hood over them
+  const BX = WHEEL_POS.x;
+  cab.add(new THREE.BoxGeometry(0.6, 0.3, 0.2), padC, { x: BX, y: 1.66, z: -4.07, rx: -0.39 });
+  cab.add(new THREE.CylinderGeometry(0.15, 0.15, 0.62, 18, 1, true, 0, Math.PI), padC, { x: BX, y: 1.8, z: -4.06, rz: Math.PI / 2, sx: 0.4 });
+  cab.add(new THREE.CylinderGeometry(0.145, 0.145, 0.6, 18, 1, true, 0, Math.PI), '#15191c', { x: BX, y: 1.798, z: -4.06, rz: Math.PI / 2, sx: 0.38, sy: -1 });
+  for (const sx of [-1, 1]) cab.add(new THREE.BoxGeometry(0.03, 0.24, 0.17), padC, { x: BX + sx * 0.3, y: 1.7, z: -3.99, rx: -0.39 });
+  // switch pod to the right of the wheel (rocker switches: lights, wipers, hazards, kneel, AC...)
+  cab.add(new THREE.BoxGeometry(0.26, 0.2, 0.12), padC, { x: 1.0, y: 1.5, z: -3.66, rx: -0.55, ry: -0.35 });
+  // centre console under the touch buttons
+  cab.add(new THREE.BoxGeometry(0.8, 0.13, 0.08), padC, { x: -0.245, y: 1.495, z: -3.728, rx: -0.7 });
+  // round air vents on the dash face
+  for (const x of [-0.95, -0.15, 1.02]) {
+    cab.add(new THREE.CylinderGeometry(0.055, 0.055, 0.03, 16), '#15191c', { x, y: 1.36, z: -3.74, rx: Math.PI / 2 });
+    cab.add(new THREE.TorusGeometry(0.055, 0.01, 6, 16), '#8e979c', { x, y: 1.36, z: -3.725 });
+    for (const k of [-1, 0, 1]) cab.add(new THREE.BoxGeometry(0.1, 0.008, 0.012), '#3d464c', { x, y: 1.36 + k * 0.025, z: -3.72 });
+  }
+  // a sun visor over the driver and a little fan on the dash (every Indonesian bus has one)
+  cab.add(new THREE.BoxGeometry(0.62, 0.02, 0.26), '#2b3136', { x: BX, y: 2.86, z: -3.9, rx: 0.25 });
+  cab.add(new THREE.CylinderGeometry(0.02, 0.03, 0.12, 8), '#e8ecef', { x: -0.95, y: 1.65, z: -3.95 });
+  cab.add(new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16), '#e8ecef', { x: -0.95, y: 1.78, z: -3.95, rx: Math.PI / 2 - 0.3 });
   // steering column
   const colA = new THREE.Vector3(WHEEL_POS.x, 1.0, -3.95);
   const colLen = colA.distanceTo(WHEEL_POS);
   const colMid = colA.clone().add(WHEEL_POS).multiplyScalar(0.5);
   cab.add(new THREE.CylinderGeometry(0.045, 0.06, colLen, 10), '#22272b', { x: colMid.x, y: colMid.y, z: colMid.z, rx: -Math.atan2(WHEEL_POS.z - colA.z, WHEEL_POS.y - colA.y) });
+  // the column cowl with the indicator and wiper stalks
+  const cowl = colA.clone().lerp(WHEEL_POS, 0.78);
+  const colRx = -Math.atan2(WHEEL_POS.z - colA.z, WHEEL_POS.y - colA.y);
+  cab.add(new THREE.BoxGeometry(0.13, 0.2, 0.13), '#1f2427', { x: cowl.x, y: cowl.y, z: cowl.z, rx: colRx });
+  for (const sx of [-1, 1]) cab.add(new THREE.CylinderGeometry(0.008, 0.01, 0.17, 6), '#2b3136', { x: cowl.x + sx * 0.12, y: cowl.y + 0.03, z: cowl.z, rz: sx * 1.35 });
   // driver's seat
   const seatX = DRIVER_EYE.x;
   cab.add(new THREE.BoxGeometry(0.52, 0.12, 0.5), '#2a2f33', { x: seatX, y: FLOOR + 0.45, z: -2.95 });
@@ -321,23 +353,64 @@ export function buildBus(app) {
   wheelPivot.rotation.x = -(Math.PI / 2 - WHEEL_TILT);
   const wheel = new THREE.Group();
   wheelPivot.add(wheel);
-  const wheelMat = new THREE.MeshStandardMaterial({ color: '#1f2326', roughness: 0.55 });
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R, 0.022, 10, 40), wheelMat);
+  const wheelMat = new THREE.MeshStandardMaterial({ color: '#1c1f22', roughness: 0.6, emissive: '#000000' });
+  const spokeMat = new THREE.MeshStandardMaterial({ color: '#5b646a', roughness: 0.35, metalness: 0.6 });
+  // a thick leather rim with finger bumps on the back, 2 spokes dipping a little and one below
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R, 0.026, 12, 56), wheelMat);
   wheel.add(rim);
-  for (let i = 0; i < 3; i++) {
-    const a = -Math.PI / 2 + (i - 1) * (Math.PI * 0.6) + (i === 1 ? 0 : 0);
-    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.03, WHEEL_R, 0.02), wheelMat);
-    spoke.position.set(Math.cos(a) * WHEEL_R / 2, Math.sin(a) * WHEEL_R / 2, 0);
+  const gripMat = new THREE.MeshStandardMaterial({ color: '#2a2f33', roughness: 0.8 });
+  for (const a0 of [Math.PI * 0.72, Math.PI * 0.28]) {
+    const grip = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R, 0.029, 10, 16, 0.75), gripMat);
+    grip.rotation.z = a0 - 0.375;
+    wheel.add(grip);
+  }
+  for (const a of [-0.22, Math.PI + 0.22, -Math.PI / 2]) {
+    const len = WHEEL_R - 0.07;
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(a === -Math.PI / 2 ? 0.07 : 0.05, len, 0.022), spokeMat);
+    spoke.position.set(Math.cos(a) * (0.07 + len / 2), Math.sin(a) * (0.07 + len / 2), -0.01);
     spoke.rotation.z = a + Math.PI / 2;
     wheel.add(spoke);
   }
-  const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 20), new THREE.MeshStandardMaterial({ color: P.busGreen, roughness: 0.4 }));
-  hubCap.rotation.x = Math.PI / 2;
-  wheel.add(hubCap);
-  // a pink grip marker at the top so you can see how far it's turned
-  const mark = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R, 0.026, 8, 8, 0.35), new THREE.MeshStandardMaterial({ color: P.busPink, roughness: 0.4 }));
-  mark.rotation.z = Math.PI / 2 - 0.175;
+  // the horn pad: dark, padded, with a small FDC tooth badge
+  const pad = new THREE.Mesh(new RoundedBoxGeometry(0.16, 0.13, 0.05, 3, 0.025), new THREE.MeshStandardMaterial({ color: '#23282c', roughness: 0.7 }));
+  pad.position.z = 0.005;
+  wheel.add(pad);
+  const badge = new THREE.Mesh(new THREE.CircleGeometry(0.026, 20), new THREE.MeshBasicMaterial({ map: badgeTexture() }));
+  badge.position.z = 0.032;
+  wheel.add(badge);
+  // a thin pink stitch mark at the top so you can see how far it's turned
+  const mark = new THREE.Mesh(new THREE.TorusGeometry(WHEEL_R, 0.0295, 8, 6, 0.08), new THREE.MeshStandardMaterial({ color: P.busPink, roughness: 0.5 }));
+  mark.rotation.z = Math.PI / 2 - 0.04;
   wheel.add(mark);
+  // hands holding the wheel (shown where your controller grabbed it, they turn with the wheel),
+  // and two see-through "hold here" hands as a hint until you first grab it
+  const handMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.45 });
+  const cuffMat = new THREE.MeshStandardMaterial({ color: P.busGreen, roughness: 0.5 });
+  const makeMitt = (mat, cmat) => {
+    const m = new THREE.Group();
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.042, 14, 10), mat);
+    palm.scale.set(1.1, 0.75, 1.35);
+    const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.034, 0.011, 6, 16), cmat);
+    cuff.position.set(0, 0, 0.05);
+    m.add(palm, cuff);
+    return m;
+  };
+  const held = {};
+  for (const side of ['left', 'right']) {
+    const m = makeMitt(handMat, cuffMat);
+    m.visible = false;
+    wheel.add(m);
+    held[side] = m;
+  }
+  const hintMat = new THREE.MeshBasicMaterial({ color: '#7dffa0', transparent: true, opacity: 0.45, depthWrite: false });
+  const hints = [Math.PI * 0.8, Math.PI * 0.2].map((a) => {
+    const m = makeMitt(hintMat, hintMat);
+    m.position.set(Math.cos(a) * WHEEL_R, Math.sin(a) * WHEEL_R, 0.035);
+    m.rotation.z = a - Math.PI / 2;
+    m.visible = false;
+    wheel.add(m);
+    return m;
+  });
   inside.add(wheelPivot);
 
   // ------------------------------------------------------------------ behaviour
@@ -347,6 +420,21 @@ export function buildBus(app) {
   let charmVel = 0;
   const api = {
     group, outside, inside, wheel, wheelPivot, seats: seatSpots, charm, mirrors,
+    /** Show a hand holding the rim at `angle` (wheel space), or hide it (null). */
+    setHold(side, angle) {
+      const m = held[side];
+      if (!m) return;
+      m.visible = angle != null;
+      if (angle == null) return;
+      m.position.set(Math.cos(angle) * WHEEL_R, Math.sin(angle) * WHEEL_R, 0.03);
+      m.rotation.z = angle - Math.PI / 2;
+    },
+    /** Glow the rim when a hand can grab it; pulse the "hold here" hint hands. */
+    setWheelHint({ near = false, hint = false, t = 0 } = {}) {
+      wheelMat.emissive.set(near ? '#1d6b33' : '#000000');
+      for (const h of hints) h.visible = hint;
+      if (hint) hintMat.opacity = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(t * 5));
+    },
     /** Draw one of the two mirrors (they alternate). Call once per frame before the main render. */
     renderMirrors(renderer, scene) {
       const m = mirrors[mirrorFrame++ % 2];
@@ -482,3 +570,15 @@ function doorLeafTexture() {
   return t;
 }
 
+
+function badgeTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  c.fillStyle = '#ffffff';
+  c.beginPath(); c.arc(64, 64, 62, 0, Math.PI * 2); c.fill();
+  drawLogo(c, 26, 26, 76, { text: false, green: P.busGreen });
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}

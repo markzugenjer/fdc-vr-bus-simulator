@@ -34,7 +34,10 @@ export class Driver {
     };
     window.addEventListener('keydown', this.onKey);
     window.addEventListener('keyup', this.onKey);
-    this.grabs = new Map(); // pointer → { last angle }
+    this.grabs = new Map(); // pointer → { last angle, anchor on the rim }
+    this.gripWas = new Map();
+    this.near = 0; // hands close enough to grab the wheel (for the glow)
+    this.nearNow = 0;
     this.buttonsHeld = new Map();
   }
 
@@ -70,6 +73,7 @@ export class Driver {
     let brake = 0;
     let steerIn = 0;
     let steering = false;
+    this.nearNow = 0;
     if (xr) {
       for (const p of this.app.pointers.controllers) {
         const gp = p.gamepad;
@@ -101,6 +105,7 @@ export class Driver {
       if (k.has('KeyA') || k.has('ArrowLeft')) { steerIn -= 1; steering = true; }
       if (k.has('KeyD') || k.has('ArrowRight')) { steerIn += 1; steering = true; }
     }
+    this.near = this.nearNow;
     if (this.override) ({ gas, brake, steerIn, steering } = { ...{ gas, brake, steerIn, steering }, ...this.override });
     this.gas = gas;
     this.brake = brake;
@@ -118,16 +123,24 @@ export class Driver {
     this.wheelAngle = THREE.MathUtils.clamp(this.wheelAngle, -WHEEL_MAX, WHEEL_MAX);
   }
 
+  /**
+   * Hold the wheel: bring a hand near the rim and squeeze the grip. While held, the wheel turns
+   * with your hand going round it (like a real one); with two hands it follows both. The grab
+   * zone is generous (a hand within ~17 cm of the rim) because you can't feel it in VR.
+   */
   grabWheel(p, down, wheelPivot) {
     const g = this.grabs.get(p);
     const pos = new THREE.Vector3().setFromMatrixPosition(p.object.matrixWorld);
     const local = wheelPivot.worldToLocal(pos);
     const r = Math.hypot(local.x, local.y);
     const ang = Math.atan2(local.y, local.x);
+    const near = Math.abs(local.z) < 0.22 && Math.abs(r - WHEEL_R) < 0.17;
+    if (near && !g) this.nearNow++;
     if (down && !g) {
-      if (Math.abs(local.z) < 0.16 && r > WHEEL_R - 0.14 && r < WHEEL_R + 0.14) {
-        this.grabs.set(p, { last: ang });
-        p.gamepad?.hapticActuators?.[0]?.pulse?.(0.4, 40);
+      if (near && !this.gripWas.get(p)) {
+        // where on the rim the hand holds, in the wheel's own (turning) frame
+        this.grabs.set(p, { last: ang, anchor: ang + this.wheelAngle, tick: this.wheelAngle });
+        p.gamepad?.hapticActuators?.[0]?.pulse?.(0.5, 40);
       }
     } else if (g && down) {
       let d = ang - g.last;
@@ -135,8 +148,12 @@ export class Driver {
       g.last = ang;
       // turning the wheel clockwise (seen by the driver) steers right
       this.wheelAngle -= d / Math.max(1, this.grabs.size);
+      // a little click in the hand every ~15° of turn
+      if (Math.abs(this.wheelAngle - g.tick) > 0.26) { g.tick = this.wheelAngle; p.gamepad?.hapticActuators?.[0]?.pulse?.(0.12, 12); }
     } else if (g && !down) this.grabs.delete(p);
+    this.gripWas.set(p, down);
   }
+
 
   /** Advance the bus. `maxSpeed` in m/s. Returns events (bump). */
   step(dt, { maxSpeed = 11.1, assistSpeed = null } = {}) {

@@ -52,6 +52,7 @@ export function createGame(app) {
   const shadows = new ShadowPool(96);
   group.add(shadows.mesh);
   let mirrorTick = 0;
+  let everHeld = false; // show the "hold the wheel here" hint until the player first grabs it
   const shadowList = () => (alighting.length ? [...world.people, ...alighting.filter((p) => !world.people.includes(p))] : world.people);
 
   // controller "hands" (small mitts so you can see your hands on the wheel)
@@ -149,7 +150,7 @@ export function createGame(app) {
       const lines = [
         ['Tujuan', 'Jemput penumpang di 3 halte, antar ke FDC Dental Clinic.'],
         ['Gas / rem', 'Pelatuk kanan = gas, pelatuk kiri = rem.'],
-        ['Setir', 'Stik kiri/kanan, atau pegang setir (tombol grip) dan putar.'],
+        ['Setir', 'Pegang setir: dekatkan tangan ke setir, tahan tombol grip, lalu putar seperti setir sungguhan. Pakai satu atau dua tangan. (Stik kiri/kanan juga bisa.)'],
         ['Halte', 'Berhenti di zona hijau, tekan A untuk buka pintu.'],
         ['Lampu', 'Berhenti di garis saat lampu merah.'],
         ['Senyum', 'Nyetir halus = penumpang senang = skor tinggi!'],
@@ -175,7 +176,7 @@ export function createGame(app) {
   bus.inside.add(dash);
   const dBtn = (label, tone, x, fn) => {
     const b = makeButton(app, { label, tone, w: 0.15, h: 0.065, onSelect: fn });
-    b.position.set(x, 1.475, -3.77);
+    b.position.set(x, 1.53, -3.69); // on the centre console, in front of the dash
     b.rotation.x = -0.7;
     dash.add(b);
     return b;
@@ -353,7 +354,7 @@ export function createGame(app) {
     sfx.setEngine(true, 0, 0);
     if (config.radio) { music.on = true; music.setOn(true); }
     applySettings();
-    say(`Halte pertama: ${world.stops[0].name}`, config.mode === 'santai' ? 'Bus jalan sendiri, kamu yang menyetir. Rem = pelatuk kiri.' : 'Gas = pelatuk kanan · Rem = pelatuk kiri · Setir = stik / pegang setir', 'good', 7);
+    say(`Halte pertama: ${world.stops[0].name}`, config.mode === 'santai' ? 'Bus jalan sendiri, kamu yang menyetir. Rem = pelatuk kiri.' : 'Pegang setir (grip) dan putar · Gas = pelatuk kanan · Rem = pelatuk kiri', 'good', 7);
     await app.fadeTo(0, 0.5);
   }
 
@@ -794,6 +795,8 @@ export function createGame(app) {
     hud.state.gear = driver.reverse ? 'R' : Math.abs(driver.v) < 0.05 ? 'N' : 'D';
     hud.state.door = !bus.doorClosed;
     hud.state.smile = smile;
+    hud.state.gas = driver.gas;
+    hud.state.brake = driver.brake;
     const nx = targets()[stopIdx];
     hud.nav.next = hud.nav.stops[stopIdx];
     hud.nav.nextName = nx.name;
@@ -833,7 +836,15 @@ export function createGame(app) {
     vignette.update(dt, state === 'drive' && !paused ? driver.yawRate : 0, state === 'drive' ? driver.a : 0, Math.abs(driver.v));
     hud.update(dt);
     if (state !== 'title') { sfx.setEngine(true, Math.abs(driver.v), driver.gas); music.update(); }
-    for (const h of hands) h.visible = app.renderer.xr.isPresenting;
+    // hands on the wheel: a controller holding the rim shows its hand on the wheel instead
+    const xr = app.renderer.xr.isPresenting;
+    const holding = { left: null, right: null };
+    for (const [p, gr] of driver.grabs) holding[p.handedness === 'left' ? 'left' : 'right'] = gr.anchor;
+    app.pointers.controllers.forEach((p, i) => { if (hands[i]) hands[i].visible = xr && !driver.grabs.has(p); });
+    bus.setHold('left', xr ? holding.left : null);
+    bus.setHold('right', xr ? holding.right : null);
+    if (driver.grabs.size) everHeld = true;
+    bus.setWheelHint({ near: xr && driver.near > 0 && !driver.grabs.size, hint: xr && state === 'drive' && !everHeld && !paused, t });
   }
 
   traffic.onHonk = (c) => {

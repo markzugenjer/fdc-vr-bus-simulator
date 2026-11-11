@@ -38,11 +38,15 @@ Built with Three.js + WebXR. The bus, town, people, sounds and music are all mad
 | --- | --- | --- |
 | Gas | Right trigger (or right stick up) | `W` / `↑` |
 | Brake | Left trigger (or right stick down) | `S` / `↓` / `Space` |
-| Steer | Either stick left/right, **or grab the wheel** with the grip buttons and turn it | `A` `D` / `←` `→` |
+| Steer | **Hold the wheel:** put a hand near the rim, squeeze the grip and turn it like a real wheel (one or two hands; triggers stay free for gas and brake). Either stick left/right also works | `A` `D` / `←` `→` |
 | Door | A (or the **Pintu** button on the dash) | `E` |
 | Horn | X (or **Klakson**); people nearby hop and wave | `H` |
 | Reverse | **Mundur** on the dash (when stopped) | `R` |
 | Pause | B / Y: Lanjut, Atur posisi duduk, Mulai ulang, Menu | `M` / `Esc` |
+
+**Holding the wheel:** the rim glows green when your hand is close enough to grab it, and while you hold it your hand is shown on the wheel and turns with it, with a small click in the controller every ~15°. Until you first grab it, two see-through green hands show where to hold. Let go and the wheel slowly centres itself as the bus rolls.
+
+**The cockpit** is laid out like a city bus: the instruments sit under a hood behind the wheel (speedometer, rev counter, fuel, coolant and two brake-air gauges, a centre display with the gear, speed and the passengers' smile, door and brake warning lights), with a switch pod on the right, the touch buttons (Pintu, Klakson, Radio, Mundur) on the centre console, the route screen on a holder, vents, a sun visor and a dash fan.
 
 **Mode Santai** (Pengaturan): the bus drives and brakes by itself, including slowing down for stops and red lights. You only steer and open/close the door. It's good for kids and first-timers at the booth.
 
