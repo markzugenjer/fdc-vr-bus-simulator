@@ -43,6 +43,7 @@ export class StaticKit {
         sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           totalEmissiveRadiance += vColor.rgb * ${glow.toFixed(3)};`);
       };
+      mat.customProgramCacheKey = () => `kit-glow${glow.toFixed(3)}`;
     }
     const mesh = new THREE.Mesh(geo, mat);
     mesh.matrixAutoUpdate = false;

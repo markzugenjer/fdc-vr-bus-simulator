@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { P } from './palette.js';
-import { buildWorld, LANE, WALK } from './world.js';
-import { buildBus, DRIVER_EYE } from './bus.js';
+import { buildWorld, LANE, WALK, ROAD_HALF } from './world.js';
+import { buildBus, DRIVER_EYE, SEAT_TOP } from './bus.js';
 import { BUS, drawLogo, drawQR, WEBSITE } from './livery.js';
 import { Driver } from './drive.js';
 import { Traffic } from './traffic.js';
 import { buildHud } from './hud.js';
 import { Vignette } from './comfort.js';
 import { ChillMusic } from './music.js';
-import { makePerson, animatePerson } from './people.js';
+import { makePerson, animatePerson, RIG, ShadowPool } from './people.js';
 import { config, CHOICES } from './config.js';
 import { makePanel, makeButton, tickButtons, text, roundRect, card, wrap } from '../core/ui.js';
 import { rng, store } from '../core/util.js';
@@ -48,6 +48,11 @@ export function createGame(app) {
   const music = new ChillMusic(app, { volume: 0.2 });
   const sfx = app.sfx;
   const fx = new Confetti(group);
+  // soft shadows under everyone on foot (one instanced mesh)
+  const shadows = new ShadowPool(96);
+  group.add(shadows.mesh);
+  let mirrorTick = 0;
+  const shadowList = () => (alighting.length ? [...world.people, ...alighting.filter((p) => !world.people.includes(p))] : world.people);
 
   // controller "hands" (small mitts so you can see your hands on the wheel)
   const hands = app.pointers.controllers.map((p) => {
@@ -369,6 +374,7 @@ export function createGame(app) {
     lightsPassed = new Set();
     stats.stops = [];
     stats.red = stats.bumps = stats.cars = stats.missed = 0;
+    movers.length = 0;
     for (const p of seated) bus.inside.remove(p);
     seated = [];
     bus.setDoor(false);
@@ -378,8 +384,10 @@ export function createGame(app) {
     for (const st of world.stops) {
       st.served = false;
       for (const p of st.waiting) {
+        if (p.parent !== world.group) world.group.add(p);
         p.visible = true;
-        p.userData.busy = false;
+        Object.assign(p.userData, { busy: false, sit: 0, noShadow: false, arrived: false, seat: null, baseY: 0.16 });
+        p.rotation.z = 0;
         if (p.userData.home) { p.position.copy(p.userData.home); p.rotation.y = p.userData.homeYaw; }
       }
     }
@@ -429,10 +437,86 @@ export function createGame(app) {
   }
 
   // ------------------------------------------------------------------ boarding and alighting
+  // Passengers really walk: from the halte to the door, up the steps, down the aisle to a free
+  // seat where they turn round and sit down. At the clinic they stand up, walk to the front, step
+  // down out of the door and stroll to the entrance. Positions inside are in bus space.
   const alighting = [];
+  const movers = []; // { p, path: [Vector3], i, speed, from, segLen, then }
+  const HALF_W = BUS.width / 2;
+  const DOOR_Z = -(BUS.door[0] + BUS.door[1]) / 2;
+  const FLOOR_Y = 0.8;
+  const STEP_IN = new THREE.Vector3(-HALF_W + 0.32, 0.63, DOOR_Z);
+  const SILL = new THREE.Vector3(-HALF_W - 0.05, 0.36, DOOR_Z);
+  const FRONT = new THREE.Vector3(-0.22, FLOOR_Y, -3.0);
+  const AISLE_FRONT = new THREE.Vector3(0, FLOOR_Y, -2.2);
+  const v1 = new THREE.Vector3();
+
+  /** Walk someone along a list of points (in their parent's space); `then` runs at the end. */
+  function walk(p, path, { speed = 1.1, then = null, wait = 0 } = {}) {
+    const m = { p, path, i: 0, speed, then, wait, from: p.position.clone() };
+    m.segLen = Math.max(0.01, Math.hypot(path[0].x - m.from.x, path[0].z - m.from.z));
+    movers.push(m);
+    return m;
+  }
+  function turnTowards(p, yaw, k) {
+    let d = yaw - p.rotation.y;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    p.rotation.y += d * Math.min(1, k);
+  }
+  function updateMovers(dt, t) {
+    for (let n = movers.length - 1; n >= 0; n--) {
+      const m = movers[n];
+      const p = m.p;
+      if (m.wait > 0) { m.wait -= dt; animatePerson(p, t, 'idle', p.userData.phase || 0); continue; }
+      if (m.anim) { // sitting down / standing up
+        m.anim.t += dt / m.anim.dur;
+        const k = Math.min(1, m.anim.t);
+        const e = k * k * (3 - 2 * k);
+        p.userData.sit = m.anim.sit0 + (m.anim.sit1 - m.anim.sit0) * e;
+        p.position.lerpVectors(m.anim.a, m.anim.b, e);
+        p.userData.baseY = p.position.y;
+        turnTowards(p, m.anim.yaw, dt * 8);
+        animatePerson(p, t, 'idle', p.userData.phase || 0);
+        if (k >= 1) { const f = m.anim.done; m.anim = null; movers.splice(n, 1); f?.(); }
+        continue;
+      }
+      const tgt = m.path[m.i];
+      const dx = tgt.x - p.position.x;
+      const dz = tgt.z - p.position.z;
+      const d = Math.hypot(dx, dz);
+      const step = m.speed * dt;
+      if (d <= step) {
+        p.position.x = tgt.x;
+        p.position.z = tgt.z;
+        p.userData.baseY = tgt.y;
+        m.i++;
+        m.onPoint?.(m.i);
+        if (m.i >= m.path.length) { movers.splice(n, 1); m.then?.(); continue; }
+        m.from = p.position.clone();
+        const nx = m.path[m.i];
+        m.segLen = Math.max(0.01, Math.hypot(nx.x - m.from.x, nx.z - m.from.z));
+      } else {
+        p.position.x += (dx / d) * step;
+        p.position.z += (dz / d) * step;
+        const k = 1 - Math.min(1, d / m.segLen);
+        p.userData.baseY = m.from.y + (tgt.y - m.from.y) * k;
+        turnTowards(p, Math.atan2(dx, dz), dt * 10);
+      }
+      animatePerson(p, t * (m.speed / 1.15), 'walk', p.userData.phase || 0);
+    }
+  }
+  /** Sit down on (or stand up from) a seat, as a little animation in the movers list. */
+  function sitAnim(p, sp, down, done) {
+    const s = p.userData.scale || 1;
+    const standAt = new THREE.Vector3(sp.x, FLOOR_Y, sp.z - 0.3);
+    const sitAt = new THREE.Vector3(sp.x, FLOOR_Y + SEAT_TOP + 0.07 - RIG.hip * s, sp.z + 0.07);
+    movers.push({ p, anim: { t: 0, dur: 0.8, a: down ? standAt : sitAt, b: down ? sitAt : standAt, sit0: down ? 0 : 1, sit1: down ? 1 : 0, yaw: Math.PI, done } });
+  }
+  const seatFront = (sp) => new THREE.Vector3(sp.x, FLOOR_Y, sp.z - 0.3);
+
   function startBoarding(st) {
     const door = DOOR_LOCAL.clone().applyMatrix4(bus.group.matrixWorld);
-    boarding = { st, t: 0, done: false, people: st.waiting.map((p, i) => ({ p, start: i * 0.9, done: false })), door };
+    boarding = { st, t: 0, done: false, people: st.waiting.map((p, i) => ({ p, start: i * 0.9, done: false, started: false })), door };
     for (const b of boarding.people) {
       b.p.userData.busy = true;
       if (!b.p.userData.home) { b.p.userData.home = b.p.position.clone(); b.p.userData.homeYaw = b.p.rotation.y; }
@@ -449,25 +533,34 @@ export function createGame(app) {
     for (const x of b.people) {
       if (x.done) continue;
       all = false;
+      if (x.started) continue;
       if (b.t < x.start) { animatePerson(x.p, t, 'idle', 0); continue; }
+      x.started = true;
       const p = x.p;
-      const dx = b.door.x - p.position.x;
-      const dz = b.door.z - p.position.z;
-      const d = Math.hypot(dx, dz);
-      if (d < 0.25) {
-        x.done = true;
-        p.visible = false;
-        sfx.play('step');
-        sfx.play('coin');
-        addSeated();
-        continue;
-      }
-      const sp = Math.min(d, dt * 1.6);
-      p.position.x += (dx / d) * sp;
-      p.position.z += (dz / d) * sp;
-      p.rotation.y = Math.atan2(dx, dz);
-      p.userData.baseY = 0.16 - Math.min(0.16, (1 - Math.min(1, d / 2)) * 0.16);
-      animatePerson(p, t, 'walk', 0);
+      p.userData.wave = false;
+      // to the door (world), then inside: up the steps, along the aisle to a free seat
+      walk(p, [b.door.clone().setY(0.16)], {
+        speed: 1.5,
+        then: () => {
+          const sp = freeSeat();
+          bus.group.worldToLocal(v1.copy(p.position));
+          bus.inside.add(p);
+          p.position.copy(v1);
+          p.rotation.y -= driver.yaw;
+          p.userData.noShadow = true;
+          p.userData.seat = sp;
+          seated.push(p);
+          const path = [SILL.clone(), STEP_IN.clone(), FRONT.clone(), AISLE_FRONT.clone(), new THREE.Vector3(0, FLOOR_Y, sp.z - 0.3), seatFront(sp)];
+          const m = walk(p, path, { speed: 1.05, then: () => sitAnim(p, sp, true) });
+          m.onPoint = (i) => {
+            if (i === 2) { // up the step and inside: one more passenger on board
+              x.done = true;
+              sfx.play('step');
+              sfx.play('coin');
+            }
+          };
+        },
+      });
     }
     if (all) {
       b.done = true;
@@ -486,59 +579,75 @@ export function createGame(app) {
     }
   }
 
-  function addSeated() {
+  function freeSeat() {
     const free = bus.seats.filter((sp) => !seated.some((p) => p.userData.seat === sp));
-    const sp = free[Math.floor(rand() * Math.min(free.length, 10))] || free[0];
-    if (!sp) return;
-    const p = makePerson(rand, { seated: true });
-    p.position.set(sp.x, sp.y + 0.44, sp.z - 0.02);
+    return free[Math.floor(rand() * Math.min(free.length, 10))] || free[0] || bus.seats[0];
+  }
+
+  /** Someone already sitting (used by tests and to fill the bus). */
+  function addSeated(p = makePerson(rand)) {
+    const sp = freeSeat();
+    const s = p.userData.scale || 1;
+    p.position.set(sp.x, FLOOR_Y + SEAT_TOP + 0.07 - RIG.hip * s, sp.z + 0.07);
     p.rotation.y = Math.PI; // facing the front
     p.userData.seat = sp;
+    p.userData.sit = 1;
     p.userData.baseY = p.position.y;
     p.userData.phase = rand() * 6;
+    p.userData.noShadow = true;
+    p.userData.busy = true;
     bus.inside.add(p);
     seated.push(p);
+    return p;
   }
 
   function startAlighting() {
     const door = DOOR_LOCAL.clone().applyMatrix4(bus.group.matrixWorld);
     const target = world.clinicDoor;
-    for (const [i, p] of seated.entries()) {
-      bus.inside.remove(p);
-      const w = makePerson(rand, { wave: i % 3 === 0 });
-      w.position.copy(door);
-      w.userData.baseY = 0.16;
-      w.userData.delay = i * 0.6;
-      w.userData.target = target.clone().add(new THREE.Vector3((rand() - 0.5) * 4, 0, (rand() - 0.5) * 2));
-      w.visible = false;
-      group.add(w);
-      alighting.push(w);
-    }
+    // the front rows get off first
+    const order = [...seated].sort((a, b) => a.userData.seat.z - b.userData.seat.z);
+    const ground = route.nearest(door.x, door.z).lat > ROAD_HALF ? 0.16 : 0.03;
+    order.forEach((p, i) => {
+      const sp = p.userData.seat;
+      // still finishing sitting down? let that finish first
+      const k = movers.findIndex((m) => m.p === p);
+      if (k >= 0) movers.splice(k, 1);
+      const delay = 0.4 + i * 0.75;
+      // wait for your turn (seated), stand up, walk out
+      walk(p, [p.position.clone()], { wait: delay, then: () => sitAnim(p, sp, false, () => {
+        const out = new THREE.Vector3(-HALF_W - 0.75, ground, DOOR_Z + (i % 3 - 1) * 0.25);
+        const path = [new THREE.Vector3(0, FLOOR_Y, sp.z - 0.3), AISLE_FRONT.clone(), FRONT.clone(), STEP_IN.clone(), SILL.clone(), out];
+        walk(p, path, {
+          speed: 1.05,
+          then: () => {
+            // outside: back into the world, off to the clinic for a check-up
+            bus.group.localToWorld(v1.copy(p.position));
+            group.add(p);
+            p.position.copy(v1);
+            p.rotation.y += driver.yaw;
+            p.userData.noShadow = false;
+            p.userData.baseY = v1.y;
+            const tgt = target.clone().add(new THREE.Vector3((rand() - 0.5) * 4.5, 0, (rand() - 0.5) * 2));
+            const mid = v1.clone().lerp(tgt, 0.5).setY(0.12);
+            walk(p, [mid, tgt.setY(0.1)], { speed: 1.3, then: () => { p.userData.arrived = true; } });
+          },
+        });
+      }) });
+      alighting.push(p);
+    });
     seated = [];
     for (const p of world.crowd) p.userData.cheer = true;
     sfx.play('fanfare');
     sfx.play('clap');
     fx.burst(door.clone().add(new THREE.Vector3(0, 3, 0)), 140);
     fx.burst(world.clinicDoor.clone().add(new THREE.Vector3(0, 4, 0)), 140);
-    say('Sampai di FDC Dental Clinic!', 'Semua penumpang siap cek gigi. Terima kasih, Pak/Bu Sopir!', 'pink');
+    say('Sampai di FDC Dental Clinic!', 'Semua penumpang turun untuk cek gigi. Terima kasih, Pak/Bu Sopir!', 'pink');
+    return order.length;
   }
 
   function updateAlighting(dt, t) {
-    for (const p of alighting) {
-      p.userData.delay -= dt;
-      if (p.userData.delay > 0) continue;
-      p.visible = true;
-      const tgt = p.userData.target;
-      const dx = tgt.x - p.position.x;
-      const dz = tgt.z - p.position.z;
-      const d = Math.hypot(dx, dz);
-      if (d > 0.2) {
-        p.position.x += (dx / d) * Math.min(d, dt * 1.5);
-        p.position.z += (dz / d) * Math.min(d, dt * 1.5);
-        p.rotation.y = Math.atan2(dx, dz);
-        animatePerson(p, t, 'walk', 0);
-      } else animatePerson(p, t, 'hop', p.id);
-    }
+    updateMovers(dt, t);
+    for (const p of alighting) if (p.userData.arrived) animatePerson(p, t, 'hop', p.id);
   }
 
   function finish() {
@@ -579,7 +688,7 @@ export function createGame(app) {
   }
 
   function updateDrive(dt, t) {
-    time += dt;
+    if (!(finishIn > 0)) time += dt; // the clock stops when you arrive
     const assist = config.mode === 'santai' && !driver.reverse ? santaiSpeed() : null;
     driver.readInput(dt, { wheelPivot: bus.wheelPivot });
     driver.locked = !bus.doorClosed;
@@ -648,7 +757,7 @@ export function createGame(app) {
       if (inZone && Math.abs(driver.v) < 0.15) {
         if (bus.doorClosed) say('Buka pintu!', 'Tombol A (atau E di keyboard)', 'pink');
         else if (!boarding && bus.doorOpen) {
-          if (tg.final) { served = true; startAlighting(); finishIn = 5.5; }
+          if (tg.final) { served = true; const n = startAlighting(); finishIn = Math.min(12, 5.5 + n * 0.45); }
           else startBoarding(tg.st);
         }
       } else if (d < 70 && d > -9 && msgTimer <= 0) {
@@ -674,7 +783,11 @@ export function createGame(app) {
     smile = THREE.MathUtils.clamp(smile, 0, 1);
 
     // seated passengers sway a little with the bus (and hop when happy at the end)
-    for (const p of seated) { p.rotation.z = THREE.MathUtils.clamp(-driver.yawRate * driver.v * 0.03, -0.15, 0.15); p.position.y = p.userData.baseY + Math.sin(t * 2 + p.userData.phase) * 0.004; }
+    for (const p of seated) {
+      if (p.userData.sit < 1 || movers.some((m) => m.p === p)) continue;
+      animatePerson(p, t, 'idle', p.userData.phase || 0);
+      p.rotation.z = THREE.MathUtils.clamp(-driver.yawRate * driver.v * 0.03, -0.15, 0.15);
+    }
 
     // dashboard
     hud.state.speed = driver.kmh;
@@ -710,6 +823,9 @@ export function createGame(app) {
       if (config.boothMode && resultT > config.resetAfterSeconds) toTitle();
     }
     placeBus();
+    shadows.update(shadowList());
+    // the side mirrors: one per frame while driving, now and then on the title screen
+    if (!paused && (state !== 'title' || mirrorTick++ % 8 === 0)) bus.renderMirrors(app.renderer, app.scene);
     traffic.update(state === 'title' ? dt : paused ? 0 : dt, { x: driver.x, z: driver.z, yaw: driver.yaw });
     const roll = driver.v / BUS.wheelR;
     bus.update(dt, { roll, steer: driver.steer, wheelAngle: driver.wheelAngle, accel: driver.a, lights: driver.brake > 0.1, t });
@@ -736,6 +852,7 @@ export function createGame(app) {
   window.busGame = {
     get state() { return state; }, get sAbs() { return sAbs; }, get stopIdx() { return stopIdx; }, get score() { return score; }, get smile() { return smile; },
     get served() { return served; }, get boarding() { return boarding; }, get result() { return result; }, get message() { return hud.message; },
+    get seated() { return seated; }, get alighting() { return alighting; }, get movers() { return movers; }, addSeated,
     driver, bus, world, traffic, startDrive, toTitle, toggleDoor, finish, horn,
     input(o) { driver.override = o; },
     teleport(s, lat = LANE) { driver.reset(s, lat); lastS = route.wrap(s); lap = Math.floor(s / L); sAbs = s; },

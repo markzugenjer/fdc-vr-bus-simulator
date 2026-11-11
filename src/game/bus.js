@@ -3,6 +3,7 @@ import { P } from './palette.js';
 import { BUS, sideTexture, frontTexture, windshieldTexture, rearTexture, drawLogo, roundRect } from './livery.js';
 import { StaticKit, makeBunting } from './festive.js';
 import { makePanel, text } from '../core/ui.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 /**
  * The FDC Smile Bus, outside and in.
@@ -20,6 +21,7 @@ export const WHEEL_POS = new THREE.Vector3(0.55, 1.4, -3.68);
 export const WHEEL_TILT = 0.95; // radians back from vertical (bus wheels lie quite flat)
 export const WHEEL_R = 0.22;
 const FLOOR = 0.8;
+export const SEAT_TOP = 0.44; // passenger seat cushion height above the floor
 const HALF = BUS.width / 2;
 
 export function buildBus(app) {
@@ -88,11 +90,17 @@ export function buildBus(app) {
   }
   // dark wheel wells
   for (const u of [BUS.axleFront, BUS.axleRear]) kit.add(new THREE.CylinderGeometry(0.6, 0.6, BUS.width - 0.08, 20, 1, true, -Math.PI / 2, Math.PI), '#16191c', { y: BUS.wheelR, z: -u, rz: Math.PI / 2 });
-  // ear mirrors
+  // ear mirrors: arms from the roof corners; the heads (with live glass) are built below
   for (const s of [-1, 1]) {
-    kit.add(new THREE.CylinderGeometry(0.025, 0.025, 0.75, 8), '#22272b', { x: s * (HALF + 0.12), y: 2.82, z: -4.2, rz: s * 0.9, rx: 0.55 });
-    kit.add(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), '#22272b', { x: s * (HALF + 0.3), y: 2.5, z: -4.55, rx: 0.15 });
-    kit.add(new THREE.BoxGeometry(0.1, 0.42, 0.22), '#22272b', { x: s * (HALF + 0.3), y: 2.15, z: -4.62, ry: s * 0.25 });
+    kit.add(new THREE.CylinderGeometry(0.03, 0.03, 0.75, 8), '#22272b', { x: s * (HALF + 0.12), y: 2.82, z: -4.2, rz: s * 0.9, rx: 0.55 });
+    kit.add(new THREE.CylinderGeometry(0.03, 0.03, 0.42, 8), '#22272b', { x: s * (HALF + 0.3), y: 2.55, z: -4.55, rx: 0.15 });
+    kit.add(new THREE.SphereGeometry(0.05, 8, 6), '#22272b', { x: s * (HALF + 0.3), y: 2.36, z: -4.58 });
+  }
+  // indicators and mud flaps
+  for (const s of [-1, 1]) {
+    kit.add(new THREE.BoxGeometry(0.12, 0.08, 0.05), '#ffa21f', { x: s * (HALF - 0.12), y: 0.78, z: -4.5 });
+    kit.add(new THREE.BoxGeometry(0.03, 0.06, 0.16), '#ffa21f', { x: s * (HALF + 0.005), y: 1.05, z: -3.0 });
+    for (const u of [BUS.axleFront, BUS.axleRear]) kit.add(new THREE.BoxGeometry(0.05, 0.4, 0.3), '#1d2124', { x: s * (HALF - 0.17), y: 0.28, z: -u + 0.75 });
   }
   // wipers
   for (const x of [-0.45, 0.5]) kit.add(new THREE.BoxGeometry(0.75, 0.02, 0.02), '#1b1e21', { x, y: 1.66, z: -4.4, rz: x < 0 ? 0.35 : -0.35 });
@@ -120,6 +128,35 @@ export function buildBus(app) {
     tl.position.set(s * (HALF - 0.06), 1.45, 4.44);
     outside.add(tl);
   }
+
+
+  // ------------------------------------------------------------------ side mirrors that really reflect
+  // Each mirror has a small camera looking back along the bus; what it sees is drawn into the glass
+  // (flipped like a mirror). They take turns, one per frame, at low resolution: cheap on the Quest.
+  const mirrors = [];
+  for (const s of [-1, 1]) {
+    const head = new THREE.Group();
+    head.position.set(s * (HALF + 0.3), 2.12, -4.62);
+    head.rotation.y = s < 0 ? 0.43 : -0.24; // turned towards the driver's eyes
+    const housing = new THREE.Mesh(new RoundedBoxGeometry(0.29, 0.5, 0.11, 3, 0.04), new THREE.MeshStandardMaterial({ color: '#1f2427', roughness: 0.5 }));
+    housing.position.z = -0.03;
+    head.add(housing);
+    const rt = new THREE.WebGLRenderTarget(128, 224, { samples: 0 });
+    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    rt.texture.generateMipmaps = false;
+    rt.texture.repeat.x = -1; // a mirror shows the view flipped left-right
+    rt.texture.offset.x = 1;
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.245, 0.45), new THREE.MeshBasicMaterial({ map: rt.texture, color: '#dfe6ea' }));
+    glass.position.z = 0.03;
+    head.add(glass);
+    // the camera sits in the mirror and looks back along the side, a little outwards
+    const cam = new THREE.PerspectiveCamera(36, 0.245 / 0.45, 0.3, 380);
+    cam.position.copy(head.position);
+    cam.lookAt(head.position.x + s * 0.07, head.position.y - 0.13, head.position.z + 1);
+    group.add(head, cam);
+    mirrors.push({ rt, glass, cam, head });
+  }
+  let mirrorFrame = 0;
 
   // ------------------------------------------------------------------ the door (two leaves that swing out)
   const doorTex = doorLeafTexture();
@@ -213,18 +250,18 @@ export function buildBus(app) {
     for (const x of [-0.92, -0.47, 0.47, 0.92]) seatSpots.push(new THREE.Vector3(x, FLOOR, z));
   }
   seatSpots.push(new THREE.Vector3(-0.92, FLOOR, 3.85), new THREE.Vector3(-0.47, FLOOR, 3.85), new THREE.Vector3(0, FLOOR, 3.85), new THREE.Vector3(0.47, FLOOR, 3.85), new THREE.Vector3(0.92, FLOOR, 3.85));
-  const cushion = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.12, 0.42), new THREE.MeshStandardMaterial({ roughness: 0.8 }), seatSpots.length);
-  const back = new THREE.InstancedMesh(new THREE.BoxGeometry(0.42, 0.62, 0.1), new THREE.MeshStandardMaterial({ roughness: 0.8 }), seatSpots.length);
-  const legs = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.4, 0.3), new THREE.MeshStandardMaterial({ color: '#8b9399', roughness: 0.5 }), seatSpots.length);
+  const cushion = new THREE.InstancedMesh(new RoundedBoxGeometry(0.42, 0.12, 0.42, 2, 0.04), new THREE.MeshStandardMaterial({ roughness: 0.8 }), seatSpots.length);
+  const back = new THREE.InstancedMesh(new RoundedBoxGeometry(0.42, 0.66, 0.1, 2, 0.04), new THREE.MeshStandardMaterial({ roughness: 0.8 }), seatSpots.length);
+  const legs = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.34, 0.3), new THREE.MeshStandardMaterial({ color: '#8b9399', roughness: 0.5 }), seatSpots.length);
   const m4 = new THREE.Matrix4();
   const col = new THREE.Color();
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.12, 0, 0));
   seatSpots.forEach((p, i) => {
-    m4.makeTranslation(p.x, p.y + 0.42, p.z);
+    m4.makeTranslation(p.x, p.y + SEAT_TOP - 0.06, p.z);
     cushion.setMatrixAt(i, m4);
-    m4.compose(new THREE.Vector3(p.x, p.y + 0.78, p.z + 0.22), q, new THREE.Vector3(1, 1, 1));
+    m4.compose(new THREE.Vector3(p.x, p.y + SEAT_TOP + 0.34, p.z + 0.22), q, new THREE.Vector3(1, 1, 1));
     back.setMatrixAt(i, m4);
-    m4.makeTranslation(p.x, p.y + 0.2, p.z);
+    m4.makeTranslation(p.x, p.y + 0.17, p.z);
     legs.setMatrixAt(i, m4);
     const c = (Math.floor(i / 2) + Math.floor(i / 28)) % 2 ? P.busPink : P.busGreen;
     cushion.setColorAt(i, col.set(c));
@@ -309,7 +346,26 @@ export function buildBus(app) {
   let charmSwing = 0;
   let charmVel = 0;
   const api = {
-    group, outside, inside, wheel, wheelPivot, seats: seatSpots, charm,
+    group, outside, inside, wheel, wheelPivot, seats: seatSpots, charm, mirrors,
+    /** Draw one of the two mirrors (they alternate). Call once per frame before the main render. */
+    renderMirrors(renderer, scene) {
+      const m = mirrors[mirrorFrame++ % 2];
+      const xrOn = renderer.xr.enabled;
+      const prev = renderer.getRenderTarget();
+      const inVis = inside.visible;
+      m.glass.visible = false;
+      inside.visible = false; // the mirror can't see in through the tinted windows anyway
+      try {
+        renderer.xr.enabled = false;
+        renderer.setRenderTarget(m.rt);
+        renderer.render(scene, m.cam);
+      } finally {
+        renderer.setRenderTarget(prev);
+        renderer.xr.enabled = xrOn;
+        m.glass.visible = true;
+        inside.visible = inVis;
+      }
+    },
     get doorOpen() { return doorNow > 0.95; },
     get doorClosed() { return doorNow < 0.02; },
     setDoor(open) { doorWant = open ? 1 : 0; },
@@ -425,3 +481,4 @@ function doorLeafTexture() {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+

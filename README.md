@@ -16,10 +16,12 @@ Built with Three.js + WebXR. The bus, town, people, sounds and music are all mad
 1. **Start screen:** you stand on the clinic forecourt next to the Smile Bus. Choose **Mulai menyetir**, **Pengaturan** or **Cara main**.
 2. **Drive** from the driver's seat (on the right: Indonesia drives on the left).
    - Follow the map on the dashboard to each **halte**.
-   - Stop in the **green BUS STOP zone** and open the door. The passengers walk in and sit down.
+   - Stop in the **green BUS STOP zone** and open the door. The passengers walk to the door, climb the step, walk down the aisle to a free seat, turn round and sit down.
    - Close the door and drive on.
-3. **Traffic lights:** stop at the white line when the light is red. Oncoming cars stay in their lane, and they brake and honk if you drift into it.
-4. **Back at FDC Dental Clinic:** stop in the zone and open the door. Everyone gets off for their check-up while the crowd cheers and confetti flies.
+3. **Traffic lights:** stop at the white line when the light is red. The lights have visors, a glowing lamp and the red / green countdown display, like real Indonesian lights. Oncoming cars, angkot and scooters stay in their lane, and they brake and honk if you drift into it.
+4. **Back at FDC Dental Clinic:** stop in the zone and open the door. The passengers stand up one by one (front rows first), walk to the front, step down out of the door and walk to the clinic entrance, while the crowd cheers and confetti flies.
+
+**Side mirrors:** both ear mirrors show what's behind you, live (flipped like a real mirror).
 5. **Result:**
    - stars and a score
    - passengers delivered, stops, smile %, time, red lights, bumps
@@ -97,23 +99,38 @@ npm run apk:build     # → fdc-smile-bus.apk
 adb install -r fdc-smile-bus.apk
 ```
 
+## The town
+
+- **Houses:** plastered walls in pastel colours, clay-tile hip (limasan) or gable roofs with white fascia and soffits, a tiled terrace with columns, panelled doors, framed windows with curtains and roster vents, AC units, potted plants, some water-tank towers and parked scooters, a lawn and a brick-and-railing fence with a sliding gate.
+- **Ruko (shophouses):** 2–3 storeys, open shops full of goods or rolling doors, named shop signs (Apotek Sehat, Bakso Pak Kumis, Fotokopi...), striped awnings, balconies with railings, AC units, parapets and water tanks.
+- **Warung:** wooden stalls with zinc roofs, banners (Es Teh, Nasi Goreng, Sate Ayam...), jars of snacks, hanging sachets, a bench and plastic stools. Gerobak carts, benches and recycling bins along the sidewalks.
+- **Street:** worn asphalt with tyre tracks and patches, black-and-white painted kerbs, paving-block sidewalks with the yellow tactile strip, drains, zebra crossings and arrows at the junctions, electricity poles with sagging wires and transformers, curved LED street lamps.
+- **Nature:** mango and ketapang trees, coconut palms with fronds and coconuts, banana plants, flowering bushes, hills and a volcano on the horizon, fluffy clouds.
+- **People:** each person has moving arms and legs (walk, wave, cheer, sit), many looks (hijab, peci, caps, school uniforms with backpacks, skirts, glasses, bags), and a soft shadow. Some stroll up and down the sidewalks.
+- **Traffic:** sedans, hatchbacks, angkot minivans with their route band, and scooters with riders.
+
+The buildings' details are painted once into one texture atlas (`src/game/atlas.js`), so all that variety costs no extra draw calls.
+
 ## Performance
 
-- **Static scenery is merged:** all houses, shops, warungs, shelters, poles and the cockpit are a handful of meshes in total.
-- **Repeats are instanced:** trees, palms, umbul-umbul, bunting, balloons, lamps, cars and seats.
+- **Static scenery is merged** into one mesh per 90 m block (one shared atlas material), so blocks behind you are skipped.
+- **Repeats are instanced:** trees (with lower-poly crowns far from the road), palms, bananas, bushes, umbul-umbul, bunting, balloons, lamps, traffic lamps, vehicles, seats and shadows.
+- **People are one mesh each;** their limbs bend in the vertex shader (no skeletons).
+- **Side mirrors** are 128 × 224 renders that take turns, one per frame, and don't draw the bus interior.
 - **Panels update about 10 times a second,** not every frame.
-- **Result:** about 60–70 draw calls and 130k triangles while driving, with no shadows or post-processing.
+- **Result:** about 85–110 draw calls and 280–320k triangles while driving, with no real-time shadows or post-processing.
 
 ## Files
 
 ```
 src/game/game.js     the round: start screen, driving rules, stops, boarding, scoring, result
-src/game/bus.js      the Smile Bus: outer shell, door, wheels, cockpit, seats, garland, tooth charm
+src/game/bus.js      the Smile Bus: outer shell, door, wheels, live side mirrors, cockpit, seats, garland, tooth charm
 src/game/livery.js   the paint job (canvas textures from the photos), FDC logo, mascot, QR
-src/game/world.js    the town: road loop, houses, halte, traffic lights, clinic, festive decor
+src/game/world.js    the town: road loop, houses, ruko, warungs, halte, traffic lights, clinic, trees, poles, decor
+src/game/atlas.js    the town's texture atlas (roof tiles, windows, shop signs...) and TexKit, the merged-scenery builder
 src/game/drive.js    controls and the vehicle model (jerk-limited, soft kerbs)
-src/game/traffic.js  oncoming cars
-src/game/people.js   cartoon townsfolk and passengers
+src/game/traffic.js  oncoming sedans, hatchbacks, angkot and scooters
+src/game/people.js   townsfolk and passengers with bending limbs, blob shadows
 src/game/hud.js      dashboard: speedometer, smile meter, map, windscreen messages
 src/game/comfort.js  the anti-motion-sickness vignette
 src/game/festive.js  bunting with fairy lights, balloons, merged static kit

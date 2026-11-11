@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { P } from './palette.js';
 import { makePanel, text, roundRect } from '../core/ui.js';
 import { DRIVER_EYE } from './bus.js';
@@ -128,9 +129,21 @@ export function buildHud(bus, route) {
       text(c, nav.light === 'red' ? 'Lampu merah' : nav.light === 'yellow' ? 'Lampu kuning' : 'Lampu hijau', tx + H * 0.12, H * 0.92, { size: H * 0.065, weight: 800, color: col });
     }
   }, { ppm: 1400 });
-  navPanel.mesh.position.set(-0.08, 1.6, -3.9);
+  // the route screen stands ON the dashboard in a little tablet holder (it used to dip into it)
+  navPanel.mesh.position.set(-0.08, 1.7, -3.9);
   navPanel.mesh.rotation.set(-0.3, 0.18, 0);
-  g.add(navPanel.mesh);
+  navPanel.mesh.renderOrder = 2;
+  const holderMat = new THREE.MeshStandardMaterial({ color: '#1b1f22', roughness: 0.5 });
+  const bezel = new THREE.Mesh(new RoundedBoxGeometry(0.405, 0.285, 0.03, 2, 0.012), holderMat);
+  bezel.position.z = -0.018;
+  navPanel.mesh.add(bezel);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.12, 8), holderMat);
+  arm.position.set(0, -0.1, -0.06);
+  arm.rotation.x = 0.3;
+  navPanel.mesh.add(arm);
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.02, 14), holderMat);
+  foot.position.set(-0.08, 1.535, -3.95);
+  g.add(navPanel.mesh, foot);
 
   // ------------------------------------------------ message strip at the top of the windscreen
   let msg = { text: '', sub: '', tone: 'info' };
