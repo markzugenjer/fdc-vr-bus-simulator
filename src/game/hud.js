@@ -116,7 +116,7 @@ export function buildHud(bus, route) {
   g.add(cluster.mesh);
 
   // the switch pod's rocker switches and the push-button gear selector (static labels)
-  const pod = makePanel(0.24, 0.18, (c, W, H) => {
+  const pod = makePanel(0.15, 0.115, (c, W, H) => {
     c.fillStyle = '#15191c'; c.fillRect(0, 0, W, H);
     const labels = ['LAMPU', 'WIPER', 'HAZARD', 'AC', 'KABIN', 'KNEEL'];
     labels.forEach((l, i) => {
@@ -132,8 +132,12 @@ export function buildHud(bus, route) {
       text(c, l, x, y + H * 0.04, { size: H * 0.11, weight: 900, color: l === 'D' ? '#5dff8a' : '#cfd6db', align: 'center' });
     });
   }, { ppm: 1200 });
-  pod.mesh.position.set(1.0 - 0.02, 1.5 + 0.035, -3.66 + 0.05);
-  pod.mesh.rotation.set(-0.55, -0.35, 0, 'YXZ');
+  // on the face of the switch pod (bus.js), facing the driver
+  {
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(0.99, 1.64, -3.83), new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.75, -0.35, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
+    pod.mesh.position.set(0, 0, 0.037).applyMatrix4(m);
+    pod.mesh.rotation.set(-0.75, -0.35, 0, 'YXZ');
+  }
   g.add(pod.mesh);
 
   // ------------------------------------------------ navigation screen

@@ -189,7 +189,9 @@ export function buildBus(app) {
   cab.add(new THREE.BoxGeometry(0.06, BUS.winBottom - FLOOR, 0.45), wall, { x: -IN, y: (FLOOR + BUS.winBottom) / 2, z: -4.02 });
   // window sills (green) and the upper wall + roof liner
   for (const s of [-1, 1]) {
-    cab.add(new THREE.BoxGeometry(0.14, 0.04, 8.0), P.busGreen, { x: s * (IN - 0.04), y: BUS.winBottom, z: 0.1 });
+    // the sill stops behind the dash, and on the door side it leaves the doorway open
+    const z0 = s < 0 ? -BUS.door[0] + 0.05 : -3.7;
+    cab.add(new THREE.BoxGeometry(0.08, 0.035, 4.1 - z0), P.busGreen, { x: s * (IN - 0.03), y: BUS.winBottom, z: (z0 + 4.1) / 2 });
     cab.add(new THREE.BoxGeometry(0.08, 0.25, 8.2), '#f7f8f9', { x: s * IN, y: BUS.winTop + 0.1, z: 0.05 });
     // luggage racks / AC ducts along the roof
     cab.add(new THREE.BoxGeometry(0.42, 0.14, 7.0), '#e4e8eb', { x: s * (IN - 0.22), y: 2.95, z: 0.7 });
@@ -218,20 +220,40 @@ export function buildBus(app) {
   // pod on the right, the centre console with the big door / horn / radio / reverse buttons, vents
   const dashC = '#4a535a';
   const padC = '#323a40';
-  cab.add(new THREE.BoxGeometry(BUS.width - 0.14, 0.7, 0.55), dashC, { y: FLOOR + 0.35 + 0.05, z: -4.02 });
-  cab.add(new THREE.BoxGeometry(BUS.width - 0.14, 0.05, 0.6), padC, { y: 1.565, z: -4.02 }); // padded top
-  cab.add(new THREE.CylinderGeometry(0.035, 0.035, BUS.width - 0.14, 12), padC, { y: 1.54, z: -3.745, rz: Math.PI / 2 }); // rounded front edge
+  // the dash is cut away in front of the driver (a lower, deeper recess), so the steering wheel
+  // and its column sit in free space instead of poking through the dash
+  const DW = (BUS.width - 0.14) / 2;
+  const CUT = [WHEEL_POS.x - 0.36, Math.min(DW, WHEEL_POS.x + 0.36)];
+  for (const [x0, x1] of [[-DW, CUT[0]], [CUT[1], DW]]) {
+    if (x1 - x0 < 0.01) continue;
+    const w = x1 - x0;
+    const x = (x0 + x1) / 2;
+    cab.add(new THREE.BoxGeometry(w, 0.7, 0.55), dashC, { x, y: FLOOR + 0.35 + 0.05, z: -4.02 });
+    cab.add(new THREE.BoxGeometry(w, 0.05, 0.6), padC, { x, y: 1.565, z: -4.02 }); // padded top
+    cab.add(new THREE.CylinderGeometry(0.035, 0.035, w, 12), padC, { x, y: 1.54, z: -3.745, rz: Math.PI / 2 }); // rounded front edge
+  }
+  {
+    const w = CUT[1] - CUT[0];
+    const x = (CUT[0] + CUT[1]) / 2;
+    cab.add(new THREE.BoxGeometry(w, 0.55, 0.34), dashC, { x, y: FLOOR + 0.05 + 0.275, z: -4.12 }); // lower, set back
+    cab.add(new THREE.BoxGeometry(w, 0.04, 0.36), padC, { x, y: 1.4, z: -4.12 });
+    cab.add(new THREE.CylinderGeometry(0.03, 0.03, w, 12), padC, { x, y: 1.385, z: -3.94, rz: Math.PI / 2 });
+    for (const sx of [0, 1]) cab.add(new THREE.BoxGeometry(0.02, 0.2, 0.25), padC, { x: CUT[sx] + (sx ? -0.01 : 0.01), y: 1.48, z: -3.87 }); // side walls of the cut-out
+  }
   cab.add(new THREE.BoxGeometry(BUS.width - 0.5, 0.006, 0.09), '#111417', { y: 1.593, z: -4.2 }); // defrost grille
   for (let k = -9; k <= 9; k++) cab.add(new THREE.BoxGeometry(0.008, 0.008, 0.08), '#3d464c', { x: k * 0.1, y: 1.596, z: -4.2 });
   cab.add(new THREE.BoxGeometry(0.42, 0.012, 0.3), P.busGreen, { x: -0.62, y: 1.596, z: -3.98 }); // green trim on the passenger side
   // the binnacle: a housing behind the instruments and a curved hood over them
   const BX = WHEEL_POS.x;
-  cab.add(new THREE.BoxGeometry(0.6, 0.3, 0.2), padC, { x: BX, y: 1.66, z: -4.07, rx: -0.39 });
+  cab.add(new THREE.BoxGeometry(0.6, 0.42, 0.2), padC, { x: BX, y: 1.6, z: -4.1, rx: -0.39 });
   cab.add(new THREE.CylinderGeometry(0.15, 0.15, 0.62, 18, 1, true, 0, Math.PI), padC, { x: BX, y: 1.8, z: -4.06, rz: Math.PI / 2, sx: 0.4 });
   cab.add(new THREE.CylinderGeometry(0.145, 0.145, 0.6, 18, 1, true, 0, Math.PI), '#15191c', { x: BX, y: 1.798, z: -4.06, rz: Math.PI / 2, sx: 0.38, sy: -1 });
   for (const sx of [-1, 1]) cab.add(new THREE.BoxGeometry(0.03, 0.24, 0.17), padC, { x: BX + sx * 0.3, y: 1.7, z: -3.99, rx: -0.39 });
   // switch pod to the right of the wheel (rocker switches: lights, wipers, hazards, kneel, AC...)
-  cab.add(new THREE.BoxGeometry(0.26, 0.2, 0.12), padC, { x: 1.0, y: 1.5, z: -3.66, rx: -0.55, ry: -0.35 });
+  // (on the dash's right end, kept clear of the side wall and the wheel)
+  const podM = new THREE.Matrix4().compose(new THREE.Vector3(0.99, 1.64, -3.83), new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.75, -0.35, 0, 'YXZ')), new THREE.Vector3(1, 1, 1));
+  cab.add(new THREE.BoxGeometry(0.16, 0.13, 0.07), padC, { parent: podM });
+  cab.add(new THREE.BoxGeometry(0.1, 0.06, 0.12), padC, { y: -0.06, z: -0.05, parent: podM }); // its foot on the dash
   // centre console under the touch buttons
   cab.add(new THREE.BoxGeometry(0.8, 0.13, 0.08), padC, { x: -0.245, y: 1.495, z: -3.728, rx: -0.7 });
   // round air vents on the dash face
